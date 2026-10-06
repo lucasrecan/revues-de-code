@@ -159,7 +159,7 @@ export class Product {
 
   // --- Catalog / images / discounts ---
 
-  async addImage(ctx: string, url: string, overwrite: boolean = true): Promise<void> {
+  async addImage(ctx: string, url: string): Promise<void> {
     if (url) {
       if (url.substring(0, 4) === "http") {
         if (!(this.imgs[ctx] === undefined)) {
