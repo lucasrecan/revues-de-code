@@ -26,7 +26,7 @@ vi.mock("@prisma/client", () => ({
   Prisma: {},
 }));
 
-import { Product, Price, Supplier, Warehouse } from "./Product";
+import { Product, Price, Supplier, Warehouse, DEFAULT_MARGIN_PERCENTAGE, DEFAULT_VAT_PERCENTAGE } from "./Product";
 
 function hasProp(obj: unknown, propName: string): boolean {
   return typeof obj === "object" && obj !== null && propName in (obj as object);
@@ -47,6 +47,9 @@ describe("Price", () => {
 
     expect(hasProp(price, "vat"), "Price should have a property named `vat`").toBe(true);
     expect(price.vat).toBe(20);
+
+    expect(DEFAULT_MARGIN_PERCENTAGE).toBe(15);
+    expect(DEFAULT_VAT_PERCENTAGE).toBe(20);
   });
 });
 

@@ -43,6 +43,9 @@ export class Warehouse {
   ) {}
 }
 
+export const DEFAULT_MARGIN_PERCENTAGE: number = 15;
+export const DEFAULT_VAT_PERCENTAGE: number = 20;
+
 export class Price {
   amount: number;
   currency: string;
@@ -52,8 +55,8 @@ export class Price {
   constructor(amount: number, currency: string) {
     this.amount = amount;
     this.currency = currency;
-    this.margin = 15;
-    this.vat = 20;
+    this.margin = DEFAULT_MARGIN_PERCENTAGE;
+    this.vat = DEFAULT_VAT_PERCENTAGE;
   }
 
   getResellerPrice(): number {
