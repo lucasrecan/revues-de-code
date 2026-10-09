@@ -152,6 +152,10 @@ export class Product {
     return this.name;
   }
 
+  hydrateSuppliersRegions(suppliers: Supplier[]): void {
+    this.suppliersRegions = new Map(suppliers.map((supplier) => [supplier.region, supplier]));
+  }
+
   // --- Catalog / images / discounts ---
 
   async addImage(context: string, url: string): Promise<void> {
@@ -227,7 +231,7 @@ export class Product {
     const supplier = suppliers.find((candidateSupplier) => candidateSupplier.region === region);
     if (!supplier) throw new Error(`No supplier found for region ${region}`);
 
-    this.suppliersRegions.set(region, supplier);
+    this.hydrateSuppliersRegions(suppliers);
     this.updatedAt = new Date();
 
     await prisma.productSupplier.upsert({
