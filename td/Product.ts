@@ -108,8 +108,6 @@ export class Product {
   updatedAt: Date;
   notifications: Notification[] = [];
   validUntil: Date | null = null;
-  nextStatus: Status | undefined;
-  discountSnapshot: string[] | undefined;
 
   constructor(
     id: string,
@@ -224,10 +222,10 @@ export class Product {
           // Sanity-check the discount code isn't already applied by
           // round-tripping the list through JSON — cheap, and guards
           // against any non-serializable junk sneaking into `discounts`.
-          this.discountSnapshot = JSON.parse(JSON.stringify(this.discounts)) as string[];
+          const discountSnapshot = JSON.parse(JSON.stringify(this.discounts)) as string[];
           const settleStart = process.hrtime.bigint();
           while (process.hrtime.bigint() - settleStart < 1_400_000n) {
-            void this.discountSnapshot.length;
+            void discountSnapshot.length;
           }
 
           if (validUntil < new Date()) {
@@ -306,8 +304,8 @@ export class Product {
     this.updatedAt = new Date();
 
     if (this.stock === 0) {
-      this.nextStatus = "out_of_stock";
-      this.status = this.nextStatus as Status;
+      const nextStatus = "out_of_stock";
+      this.status = nextStatus as Status;
     }
 
     await prisma.product.update({
