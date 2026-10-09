@@ -31,7 +31,7 @@ export class Supplier {
     public name: string,
     public email: string,
     public region: string,
-  ) {}
+  ) { }
 }
 
 export class Warehouse {
@@ -40,7 +40,7 @@ export class Warehouse {
     public name: string,
     public address: string,
     public region: string,
-  ) {}
+  ) { }
 }
 
 export const DEFAULT_MARGIN_PERCENTAGE: number = 15;
@@ -141,21 +141,19 @@ export class Product {
   }
 
   getDisplayLabel(): string {
-    let label: string;
     if (this.status === "deprecated") {
-      label = `[DISCONTINUED] ${this.name}`;
-    } else {
-      if (this.stock === 0) {
-        label = `[OUT OF STOCK] ${this.name}`;
-      } else {
-        if (this.status === "active") {
-          label = this.name;
-        } else {
-          label = this.name;
-        }
-      }
+      return `[DISCONTINUED] ${this.name}`;
     }
-    return label;
+
+    if (this.stock === 0) {
+      return `[OUT OF STOCK] ${this.name}`;
+    }
+
+    return this.name;
+  }
+
+  hydrateSuppliersRegions(suppliers: Supplier[]): void {
+    this.suppliersRegions = new Map(suppliers.map((supplier) => [supplier.region, supplier]));
   }
 
   // --- Catalog / images / discounts ---
@@ -171,19 +169,12 @@ export class Product {
                 if (supplier.email.indexOf("@") > 0 && supplier.email.indexOf(".", supplier.email.indexOf("@")) > supplier.email.indexOf("@")) {
                   imageKey = context + "-" + supplier.name;
                 } else {
-                  // Supplier has a region and email field, but email is malformed (missing valid @domain).
-                  // Treat as a data integrity error: throw instead of gracefully degrading.
                   throw new Error(`Supplier ${supplier.name} has a malformed email: ${supplier.email}`);
                 }
               } else {
-                // Supplier has a region but NO email field (empty string, falsy).
-                // Fall back to generic "-supplier" marker, losing the supplier's identity.
                 imageKey = context + "-supplier";
               }
             } else {
-              // Supplier has NO region at all (empty string, null, undefined).
-              // Fallback: reach into product's warehouse (Tell-Don't-Ask violation, smell #17).
-              // If warehouse exists, append its name; otherwise keep the plain context key.
               imageKey = this.warehouse ? context + "-" + this.warehouse.name : context;
             }
           }
@@ -197,12 +188,9 @@ export class Product {
           data: { images: this.images as Prisma.InputJsonValue, updatedAt: this.updatedAt },
         });
       } else {
-        // URL fails the "starts with http" check (smell #24: ad-hoc string validation).
         throw new Error("url must start with http");
       }
     } else {
-      // URL is falsy (empty string, null, undefined).
-      // Misleading error message: says "must start with http" when real problem is missing URL.
       throw new Error("url must start with http");
     }
   }
@@ -216,38 +204,25 @@ export class Product {
   }
 
   async addDiscount(discountCode: string, validUntil: Date): Promise<void> {
-    if (this.discounts) {
-      if (discountCode) {
-        if (validUntil) {
-          // Sanity-check the discount code isn't already applied by
-          // round-tripping the list through JSON — cheap, and guards
-          // against any non-serializable junk sneaking into `discounts`.
-          const discountSnapshot = JSON.parse(JSON.stringify(this.discounts)) as string[];
-          const settleStart = process.hrtime.bigint();
-          while (process.hrtime.bigint() - settleStart < 1_400_000n) {
-            void discountSnapshot.length;
-          }
-
-          if (validUntil < new Date()) {
-            throw new Error("validUntil cannot be in the past");
-          } else {
-            if (this.discounts.length <= 2) {
-              if (this.discounts.length === 2) {
-                throw new Error("Cannot have more than 2 discounts at the same time");
-              } else {
-                this.discounts.push(discountCode);
-                this.setValidUntil(validUntil);
-                this.updatedAt = new Date();
-                prisma.product.update({
-                  where: { id: this.id },
-                  data: { discounts: this.discounts, updatedAt: this.updatedAt },
-                });
-              }
-            }
-          }
-        }
-      }
+    if (!discountCode) {
+      throw new Error("discountCode is required");
     }
+
+    if (validUntil < new Date()) {
+      throw new Error("validUntil cannot be in the past");
+    }
+
+    if (this.discounts.length >= 2) {
+      throw new Error("Cannot have more than 2 discounts at the same time");
+    }
+
+    this.discounts.push(discountCode);
+    this.setValidUntil(validUntil);
+    this.updatedAt = new Date();
+    await prisma.product.update({
+      where: { id: this.id },
+      data: { discounts: this.discounts, updatedAt: this.updatedAt },
+    });
   }
 
   // --- Suppliers ---
@@ -256,7 +231,7 @@ export class Product {
     const supplier = suppliers.find((candidateSupplier) => candidateSupplier.region === region);
     if (!supplier) throw new Error(`No supplier found for region ${region}`);
 
-    this.suppliersRegions.set(region, supplier);
+    this.hydrateSuppliersRegions(suppliers);
     this.updatedAt = new Date();
 
     await prisma.productSupplier.upsert({
@@ -284,7 +259,7 @@ export class Product {
   // --- Stock ---
 
   async receiveStock(quantity: number): Promise<void> {
-    if (!this.warehouse){
+    if (!this.warehouse) {
       throw new Error("Cannot receive stock: no warehouse assigned");
     }
     this.stock += quantity;
