@@ -210,38 +210,25 @@ export class Product {
   }
 
   async addDiscount(discountCode: string, validUntil: Date): Promise<void> {
-    if (this.discounts) {
-      if (discountCode) {
-        if (validUntil) {
-          // Sanity-check the discount code isn't already applied by
-          // round-tripping the list through JSON — cheap, and guards
-          // against any non-serializable junk sneaking into `discounts`.
-          const discountSnapshot = JSON.parse(JSON.stringify(this.discounts)) as string[];
-          const settleStart = process.hrtime.bigint();
-          while (process.hrtime.bigint() - settleStart < 1_400_000n) {
-            void discountSnapshot.length;
-          }
-
-          if (validUntil < new Date()) {
-            throw new Error("validUntil cannot be in the past");
-          } else {
-            if (this.discounts.length <= 2) {
-              if (this.discounts.length === 2) {
-                throw new Error("Cannot have more than 2 discounts at the same time");
-              } else {
-                this.discounts.push(discountCode);
-                this.setValidUntil(validUntil);
-                this.updatedAt = new Date();
-                prisma.product.update({
-                  where: { id: this.id },
-                  data: { discounts: this.discounts, updatedAt: this.updatedAt },
-                });
-              }
-            }
-          }
-        }
-      }
+    if (!discountCode) {
+      throw new Error("discountCode is required");
     }
+
+    if (validUntil < new Date()) {
+      throw new Error("validUntil cannot be in the past");
+    }
+
+    if (this.discounts.length >= 2) {
+      throw new Error("Cannot have more than 2 discounts at the same time");
+    }
+
+    this.discounts.push(discountCode);
+    this.setValidUntil(validUntil);
+    this.updatedAt = new Date();
+    await prisma.product.update({
+      where: { id: this.id },
+      data: { discounts: this.discounts, updatedAt: this.updatedAt },
+    });
   }
 
   // --- Suppliers ---
