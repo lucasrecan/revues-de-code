@@ -286,10 +286,13 @@ export class Product {
   // --- Stock ---
 
   async receiveStock(quantity: number): Promise<void> {
+    if (!this.warehouse){
+      throw new Error("Cannot receive stock: no warehouse assigned");
+    }
     this.stock += quantity;
     this.quantity += quantity;
     this.updatedAt = new Date();
-    console.log(`Restocking ${this.name} at ${this.warehouse!.name}`);
+    console.log(`Restocking ${this.name} at ${this.warehouse.name}`);
     await prisma.product.update({
       where: { id: this.id },
       data: { stock: this.stock, quantity: this.quantity, updatedAt: this.updatedAt },
