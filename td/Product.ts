@@ -161,8 +161,9 @@ export class Product {
   async addImage(context: string, url: string): Promise<void> {
     if (url) {
       if (url.substring(0, 4) === "http") {
+        let imageKey = context;
+
         if (!(this.images[context] === undefined)) {
-          let imageKey = context;
           for (const [, supplier] of this.suppliersRegions) {
             if (supplier.region) {
               if (supplier.email) {
@@ -178,15 +179,19 @@ export class Product {
               imageKey = this.warehouse ? context + "-" + this.warehouse.name : context;
             }
           }
-          this.images[imageKey] = url;
-        } else {
-          this.images[context] = url;
         }
-        this.updatedAt = new Date();
+
+        const nextImages = { ...this.images };
+        nextImages[imageKey] = url;
+        const updatedAt = new Date();
+
         await prisma.product.update({
           where: { id: this.id },
-          data: { images: this.images as Prisma.InputJsonValue, updatedAt: this.updatedAt },
+          data: { images: nextImages as Prisma.InputJsonValue, updatedAt },
         });
+
+        this.images = nextImages;
+        this.updatedAt = updatedAt;
       } else {
         throw new Error("url must start with http");
       }
@@ -216,13 +221,17 @@ export class Product {
       throw new Error("Cannot have more than 2 discounts at the same time");
     }
 
-    this.discounts.push(discountCode);
-    this.setValidUntil(validUntil);
-    this.updatedAt = new Date();
+    const nextDiscounts = [...this.discounts, discountCode];
+    const updatedAt = new Date();
+
     await prisma.product.update({
       where: { id: this.id },
-      data: { discounts: this.discounts, updatedAt: this.updatedAt },
+      data: { discounts: nextDiscounts, updatedAt },
     });
+
+    this.discounts = nextDiscounts;
+    this.setValidUntil(validUntil);
+    this.updatedAt = updatedAt;
   }
 
   // --- Suppliers ---
@@ -231,14 +240,16 @@ export class Product {
     const supplier = suppliers.find((candidateSupplier) => candidateSupplier.region === region);
     if (!supplier) throw new Error(`No supplier found for region ${region}`);
 
-    this.hydrateSuppliersRegions(suppliers);
-    this.updatedAt = new Date();
+    const updatedAt = new Date();
 
     await prisma.productSupplier.upsert({
       where: { productId_region: { productId: this.id, region: region } },
       create: { productId: this.id, region: region, supplierId: supplier.id },
       update: { supplierId: supplier.id },
     });
+
+    this.hydrateSuppliersRegions(suppliers);
+    this.updatedAt = updatedAt;
   }
 
   // --- Pricing ---
@@ -248,12 +259,15 @@ export class Product {
   }
 
   async setMargin(marginPercentage: number): Promise<void> {
-    this.price.margin = marginPercentage;
-    this.updatedAt = new Date();
+    const updatedAt = new Date();
+
     await prisma.product.update({
       where: { id: this.id },
-      data: { priceMargin: marginPercentage, updatedAt: this.updatedAt },
+      data: { priceMargin: marginPercentage, updatedAt },
     });
+
+    this.price.margin = marginPercentage;
+    this.updatedAt = updatedAt;
   }
 
   // --- Stock ---
@@ -262,51 +276,56 @@ export class Product {
     if (!this.warehouse) {
       throw new Error("Cannot receive stock: no warehouse assigned");
     }
-    this.stock += quantity;
-    this.quantity += quantity;
-    this.updatedAt = new Date();
-    console.log(`Restocking ${this.name} at ${this.warehouse.name}`);
+
+    const nextStock = this.stock + quantity;
+    const nextQuantity = this.quantity + quantity;
+    const updatedAt = new Date();
+
     await prisma.product.update({
       where: { id: this.id },
-      data: { stock: this.stock, quantity: this.quantity, updatedAt: this.updatedAt },
+      data: { stock: nextStock, quantity: nextQuantity, updatedAt },
     });
+
+    this.stock = nextStock;
+    this.quantity = nextQuantity;
+    this.updatedAt = updatedAt;
+    console.log(`Restocking ${this.name} at ${this.warehouse.name}`);
   }
 
   async sell(quantity: number): Promise<void> {
     if (this.stock < quantity) throw new Error("Not enough stock");
 
-    this.stock -= quantity;
-    this.updatedAt = new Date();
-
-    if (this.stock === 0) {
-      this.status = "out_of_stock";
-    }
+    const nextStock = this.stock - quantity;
+    const nextStatus = nextStock === 0 ? "out_of_stock" : this.status;
+    const updatedAt = new Date();
 
     await prisma.product.update({
       where: { id: this.id },
-      data: { stock: this.stock, status: this.status, updatedAt: this.updatedAt },
+      data: { stock: nextStock, status: nextStatus, updatedAt },
     });
 
-    // Notify all regional suppliers
+    this.stock = nextStock;
+    this.status = nextStatus;
+    this.updatedAt = updatedAt;
+
     this.notifySuppliers(`Product sold: ${this.name}`, `${quantity} unit(s) of ${this.name} were sold. Remaining stock: ${this.stock}.`);
   }
 
   // --- Lifecycle ---
 
   async deprecate(): Promise<void> {
-    this.status = "deprecated";
-    this.stock = 0;
-    this.updatedAt = new Date();
+    const updatedAt = new Date();
 
     await prisma.product.update({
       where: { id: this.id },
-      data: { status: this.status, stock: this.stock, updatedAt: this.updatedAt },
+      data: { status: "deprecated", stock: 0, updatedAt },
     });
 
-    // Notify all regional suppliers
-    this.notifySuppliers(`Product deprecated: ${this.name}`, `The product ${this.name} has been deprecated and removed from the catalog.`);
+    this.status = "deprecated";
+    this.stock = 0;
+    this.updatedAt = updatedAt;
 
-    // Notify customers
+    this.notifySuppliers(`Product deprecated: ${this.name}`, `The product ${this.name} has been deprecated and removed from the catalog.`);
     this.notifications.push(this.createNotification("customers@omniproduct.com", `Product no longer available: ${this.name}`, `${this.name} is no longer available.`));
   }
 
