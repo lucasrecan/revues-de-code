@@ -90,6 +90,36 @@ export class Price {
   }
 }
 
+export class NotificationService {
+  private notifications: Notification[] = [];
+
+
+  // small helper to cut down repetition in notif building
+  create(recipient: string, subject: string, body: string, productId: string): Notification {
+    return {
+      id: crypto.randomUUID(),
+      recipient,
+      subject,
+      body,
+      channel: "email",
+      sentAt: new Date(),
+      productId,
+    };
+  }
+
+  add(notification: Notification): void {
+    this.notifications.push(notification);
+  }
+
+  send(): void {
+    // TODO Envoyer la notification
+  }
+
+  drain(): void {
+    this.notifications.length = 0;
+  }
+}
+
 export class Product {
   id: string;
   name: string;
@@ -103,10 +133,10 @@ export class Product {
   quantity: number;
   stock: number;
   warehouse: Warehouse | null;
+  notificationService: NotificationService;
   status: Status;
   createdAt: Date;
   updatedAt: Date;
-  notifications: Notification[] = [];
   validUntil: Date | null = null;
 
   constructor(
@@ -122,6 +152,7 @@ export class Product {
     quantity: number,
     stock: number,
     warehouse: Warehouse | null,
+    notificationService: NotificationService
   ) {
     this.id = id;
     this.name = name;
@@ -135,6 +166,7 @@ export class Product {
     this.quantity = quantity;
     this.stock = stock;
     this.warehouse = warehouse;
+    this.notificationService = notificationService;
     this.status = "active";
     this.createdAt = new Date();
     this.updatedAt = new Date();
@@ -326,27 +358,20 @@ export class Product {
     this.updatedAt = updatedAt;
 
     this.notifySuppliers(`Product deprecated: ${this.name}`, `The product ${this.name} has been deprecated and removed from the catalog.`);
-    this.notifications.push(this.createNotification("customers@omniproduct.com", `Product no longer available: ${this.name}`, `${this.name} is no longer available.`));
+
+    // Notify customers
+    this.notificationService.add(this.notificationService.create("customers@omniproduct.com", `Product no longer available: ${this.name}`, `${this.name} is no longer available.`, this.id));
+    this.notificationService.send();
+    this.notificationService.drain();
   }
 
   private notifySuppliers(subject: string, body: string): void {
     for (const [, supplier] of this.suppliersRegions) {
-      this.notifications.push(
-        this.createNotification(supplier.email, subject, body)
+      this.notificationService.add(
+        this.notificationService.create(supplier.email, subject, body, this.id)
       );
     }
-  }
-
-  // small helper to cut down repetition in notif building
-  private createNotification(recipient: string, subject: string, body: string): Notification {
-    return {
-      id: crypto.randomUUID(),
-      recipient,
-      subject,
-      body,
-      channel: "email",
-      sentAt: new Date(),
-      productId: this.id,
-    };
+    this.notificationService.send();
+    this.notificationService.drain();
   }
 }

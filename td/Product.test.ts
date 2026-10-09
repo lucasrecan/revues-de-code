@@ -26,7 +26,7 @@ vi.mock("@prisma/client", () => ({
   Prisma: {},
 }));
 
-import { Product, Price, Supplier, Warehouse, DEFAULT_MARGIN_PERCENTAGE, DEFAULT_VAT_PERCENTAGE } from "./Product";
+import { Product, Price, Supplier, Warehouse, DEFAULT_MARGIN_PERCENTAGE, DEFAULT_VAT_PERCENTAGE, NotificationService } from "./Product";
 
 function hasProp(obj: unknown, propName: string): boolean {
   return typeof obj === "object" && obj !== null && propName in (obj as object);
@@ -87,6 +87,7 @@ describe("Warehouse", () => {
   });
 });
 
+
 function makeProduct(): any {
   const price = new Price(50, "EUR");
   return new Product(
@@ -102,6 +103,7 @@ function makeProduct(): any {
     100,
     100,
     null,
+    new NotificationService(),
   );
 }
 
@@ -144,18 +146,22 @@ describe("Product", () => {
     expect(hasProp(product, "status"), "Product should have a property named `status` (not an abbreviation)").toBe(true);
     expect(product.status).toBe("active");
 
-    expect(hasProp(product, "notifications"), "Product should have a property named `notifications` (not an abbreviation)").toBe(true);
-    expect(product.notifications).toEqual([]);
+    expect(hasProp(product, "notificationService"), "Product should have a property named `notificationService` (not an abbreviation)").toBe(true);
+    expect(product.notificationService).toBeInstanceOf(NotificationService);
+    expect(hasProp(product, "notifications"), "Notifications should be managed by NotificationService, not Product").toBe(false);
   });
 
   it("sell() pushes a notification with proper field names: recipient, subject, body, channel, productId", async () => {
     const product = makeProduct();
     product.suppliersRegions.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", "EU"));
+    const addSpy = vi.spyOn(product.notificationService, "add");
+    const sendSpy = vi.spyOn(product.notificationService, "send");
+    const drainSpy = vi.spyOn(product.notificationService, "drain");
 
     await product.sell(1);
 
-    expect(product.notifications.length, "sell() should push exactly one notification per regional supplier").toBe(1);
-    const notification = product.notifications[0];
+    expect(addSpy).toHaveBeenCalledTimes(1);
+    const notification = addSpy.mock.calls[0][0];
 
     expect(hasProp(notification, "recipient"), "Notification should have a property named `recipient` (not an abbreviation)").toBe(true);
     expect(notification.recipient).toBe("acme@example.com");
@@ -168,6 +174,9 @@ describe("Product", () => {
 
     expect(hasProp(notification, "productId"), "Notification should have a property named `productId` (not an abbreviation)").toBe(true);
     expect(notification.productId).toBe("p1");
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    expect(drainSpy).toHaveBeenCalledOnce();
+
   });
 });
 
@@ -192,6 +201,7 @@ function makeTypedProduct() {
     100,
     100,
     null,
+    new NotificationService(),
   );
 }
 
@@ -275,15 +285,20 @@ describe("sell()", () => {
     expect(product.stock).toBe(100);
   });
 
-  it("pushes one notification per regional supplier", async () => {
-    const product = makeTypedProduct();
-    product.suppliersRegions.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", "EU"));
-    product.suppliersRegions.set("US", new Supplier("s2", "Widget Inc", "widget@example.com", "US"));
-
-    await product.sell(1);
-
-    expect(product.notifications.length).toBe(2);
-  });
+  it("adds one notification per regional supplier to NotificationService", async () => {
+      const product = makeTypedProduct();
+      product.suppliersRegions.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", "EU"));
+      product.suppliersRegions.set("US", new Supplier("s2", "Widget Inc", "widget@example.com", "US"));
+      const addSpy = vi.spyOn(product.notificationService, "add");
+  
+      await product.sell(1);
+  
+      expect(addSpy).toHaveBeenCalledTimes(2);
+      expect(addSpy.mock.calls.map(([notification]) => notification.recipient)).toEqual([
+        "acme@example.com",
+        "widget@example.com",
+      ]);
+    });
 });
 
 describe("deprecate()", () => {
@@ -296,14 +311,24 @@ describe("deprecate()", () => {
     expect(product.stock).toBe(0);
   });
 
-  it("notifies every regional supplier plus a customer-facing notification", async () => {
-    const product = makeTypedProduct();
-    product.suppliersRegions.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", "EU"));
-
-    await product.deprecate();
-
-    // 1 supplier notification + 1 customer notification
-    expect(product.notifications.length).toBe(2);
+  it("notifies every regional supplier plus a customer through NotificationService", async () => {
+      const product = makeTypedProduct();
+      product.suppliersRegions.set("EU", new Supplier("s1", "Acme Corp", "acme@example.com", "EU"));
+      const addSpy = vi.spyOn(product.notificationService, "add");
+      const sendSpy = vi.spyOn(product.notificationService, "send");
+      const drainSpy = vi.spyOn(product.notificationService, "drain");
+  
+      await product.deprecate();
+  
+      // 1 supplier notification + 1 customer notification
+      expect(addSpy).toHaveBeenCalledTimes(2);
+      expect(addSpy.mock.calls.map(([notification]) => notification.recipient)).toEqual([
+        "acme@example.com",
+        "customers@omniproduct.com",
+      ]);
+      // The current implementation sends/drains once for suppliers and once for the customer.
+      expect(sendSpy).toHaveBeenCalledTimes(2);
+      expect(drainSpy).toHaveBeenCalledTimes(2);
   });
 });
 
