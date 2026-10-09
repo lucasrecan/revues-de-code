@@ -15,6 +15,20 @@ const prisma = new PrismaClient();
 export type Channel = "email" | "sms" | "push";
 export type Status = "active" | "out_of_stock" | "deprecated";
 
+export class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ValidationError";
+  }
+}
+
+export class DomainRuleError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DomainRuleError";
+  }
+}
+
 export interface Notification {
   id: string;
   recipient: string;
@@ -202,7 +216,7 @@ export class Product {
                 if (supplier.email.indexOf("@") > 0 && supplier.email.indexOf(".", supplier.email.indexOf("@")) > supplier.email.indexOf("@")) {
                   imageKey = context + "-" + supplier.name;
                 } else {
-                  throw new Error(`Supplier ${supplier.name} has a malformed email: ${supplier.email}`);
+                  throw new ValidationError(`Supplier ${supplier.name} has a malformed email: ${supplier.email}`);
                 }
               } else {
                 imageKey = context + "-supplier";
@@ -225,10 +239,10 @@ export class Product {
         this.images = nextImages;
         this.updatedAt = updatedAt;
       } else {
-        throw new Error("url must start with http");
+        throw new ValidationError("url must start with http");
       }
     } else {
-      throw new Error("url must start with http");
+      throw new ValidationError("url must start with http");
     }
   }
 
@@ -242,15 +256,15 @@ export class Product {
 
   async addDiscount(discountCode: string, validUntil: Date): Promise<void> {
     if (!discountCode) {
-      throw new Error("discountCode is required");
+      throw new ValidationError("discountCode is required");
     }
 
     if (validUntil < new Date()) {
-      throw new Error("validUntil cannot be in the past");
+      throw new ValidationError("validUntil cannot be in the past");
     }
 
     if (this.discounts.length >= 2) {
-      throw new Error("Cannot have more than 2 discounts at the same time");
+      throw new DomainRuleError("Cannot have more than 2 discounts at the same time");
     }
 
     const nextDiscounts = [...this.discounts, discountCode];
@@ -270,7 +284,7 @@ export class Product {
 
   async addSupplierToRegion(region: string, suppliers: Supplier[]): Promise<void> {
     const supplier = suppliers.find((candidateSupplier) => candidateSupplier.region === region);
-    if (!supplier) throw new Error(`No supplier found for region ${region}`);
+    if (!supplier) throw new DomainRuleError(`No supplier found for region ${region}`);
 
     const updatedAt = new Date();
 
@@ -306,7 +320,7 @@ export class Product {
 
   async receiveStock(quantity: number): Promise<void> {
     if (!this.warehouse) {
-      throw new Error("Cannot receive stock: no warehouse assigned");
+      throw new DomainRuleError("Cannot receive stock: no warehouse assigned");
     }
 
     const nextStock = this.stock + quantity;
@@ -325,7 +339,7 @@ export class Product {
   }
 
   async sell(quantity: number): Promise<void> {
-    if (this.stock < quantity) throw new Error("Not enough stock");
+    if (this.stock < quantity) throw new DomainRuleError("Not enough stock");
 
     const nextStock = this.stock - quantity;
     const nextStatus = nextStock === 0 ? "out_of_stock" : this.status;

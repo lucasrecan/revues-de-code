@@ -26,7 +26,7 @@ vi.mock("@prisma/client", () => ({
   Prisma: {},
 }));
 
-import { Product, Price, Supplier, Warehouse, DEFAULT_MARGIN_PERCENTAGE, DEFAULT_VAT_PERCENTAGE, NotificationService } from "./Product";
+import { Product, Price, Supplier, Warehouse, DEFAULT_MARGIN_PERCENTAGE, DEFAULT_VAT_PERCENTAGE, NotificationService, DomainRuleError, ValidationError } from "./Product";
 
 function hasProp(obj: unknown, propName: string): boolean {
   return typeof obj === "object" && obj !== null && propName in (obj as object);
@@ -281,7 +281,7 @@ describe("sell()", () => {
   it("throws when selling more than the available stock", async () => {
     const product = makeTypedProduct();
 
-    await expect(product.sell(101)).rejects.toThrow("Not enough stock");
+    await expect(product.sell(101)).rejects.toThrow(DomainRuleError);
     expect(product.stock).toBe(100);
   });
 
@@ -348,7 +348,7 @@ describe("addDiscount()", () => {
     await product.addDiscount("SUMMER20", validUntil);
 
     await expect(product.addDiscount("FALL30", validUntil)).rejects.toThrow(
-      "Cannot have more than 2 discounts at the same time",
+      DomainRuleError,
     );
     expect(product.discounts).toEqual(["WELCOME10", "SUMMER20"]);
   });
@@ -358,7 +358,7 @@ describe("addDiscount()", () => {
     const pastDate = new Date(Date.now() - 1000);
 
     await expect(product.addDiscount("SUMMER20", pastDate)).rejects.toThrow(
-      "validUntil cannot be in the past",
+      ValidationError,
     );
   });
 
@@ -400,7 +400,7 @@ describe("addImage()", () => {
     const product = makeTypedProduct();
 
     await expect(product.addImage("hero", "ftp://img/hero.png")).rejects.toThrow(
-      "url must start with http",
+      ValidationError,
     );
   });
 
@@ -477,7 +477,7 @@ describe("addImage()", () => {
     await product.addImage("hero", "http://img/hero-v1.png");
 
     await expect(product.addImage("hero", "http://img/hero-v2.png")).rejects.toThrow(
-      "Supplier Acme Corp has a malformed email: not-an-email",
+      ValidationError,
     );
   });
 });
@@ -497,7 +497,7 @@ describe("addSupplierToRegion()", () => {
     const supplier = new Supplier("s1", "Acme Corp", "acme@example.com", "EU");
 
     await expect(product.addSupplierToRegion("APAC", [supplier])).rejects.toThrow(
-      "No supplier found for region APAC",
+      DomainRuleError,
     );
   });
 });
