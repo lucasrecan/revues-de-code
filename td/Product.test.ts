@@ -347,13 +347,18 @@ describe("addDiscount()", () => {
   // logic actually being broken. This is what you get for comparing
   // against a live system clock instead of an injected/fake one.
   it("accepts a validUntil that is barely in the future", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const now = new Date();
+    vi.setSystemTime(now);
+
     const product = makeTypedProduct();
-    // Only a 1ms margin: `validUntil` is essentially "now."
-    const barelyFuture = new Date(Date.now() + 1);
+    const barelyFuture = new Date(now.getTime() + 1);
 
     await product.addDiscount("SUMMER20", barelyFuture);
 
     expect(product.getValidUntil()).toBe(barelyFuture);
+
+    vi.useRealTimers();
   });
 });
 
