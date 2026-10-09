@@ -501,3 +501,20 @@ describe("addSupplierToRegion()", () => {
     );
   });
 });
+
+describe("status transitions", () => {
+  it("prevents a deprecated product from receiving stock", async () => {
+    const product = makeTypedProduct();
+    product.warehouse = new Warehouse("w1", "Main Depot", "123 Main St", "EU");
+    await product.deprecate();
+
+    await expect(product.receiveStock(10)).rejects.toThrow(DomainRuleError);
+  });
+
+  it("prevents a deprecated product from being sold", async () => {
+    const product = makeTypedProduct();
+    await product.deprecate();
+
+    await expect(product.sell(0)).rejects.toThrow(DomainRuleError);
+  });
+});

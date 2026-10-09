@@ -318,6 +318,13 @@ export class Product {
 
   // --- Stock ---
 
+  private transitionStatus(nextStatus: Status): void {
+    if (this.status === "deprecated" && nextStatus !== "deprecated") {
+      throw new DomainRuleError(`Cannot transition from deprecated to ${nextStatus}`);
+    }
+    this.status = nextStatus;
+  }
+
   async receiveStock(quantity: number): Promise<void> {
     if (!this.warehouse) {
       throw new DomainRuleError("Cannot receive stock: no warehouse assigned");
@@ -325,11 +332,14 @@ export class Product {
 
     const nextStock = this.stock + quantity;
     const nextQuantity = this.quantity + quantity;
+    const nextStatus = nextStock > 0 ? "active" : "out_of_stock";
+    
+    this.transitionStatus(nextStatus);
     const updatedAt = new Date();
 
     await prisma.product.update({
       where: { id: this.id },
-      data: { stock: nextStock, quantity: nextQuantity, updatedAt },
+      data: { stock: nextStock, quantity: nextQuantity, status: this.status, updatedAt },
     });
 
     this.stock = nextStock;
@@ -342,16 +352,16 @@ export class Product {
     if (this.stock < quantity) throw new DomainRuleError("Not enough stock");
 
     const nextStock = this.stock - quantity;
-    const nextStatus = nextStock === 0 ? "out_of_stock" : this.status;
+    const nextStatus = nextStock === 0 ? "out_of_stock" : "active";
+    this.transitionStatus(nextStatus);
     const updatedAt = new Date();
 
     await prisma.product.update({
       where: { id: this.id },
-      data: { stock: nextStock, status: nextStatus, updatedAt },
+      data: { stock: nextStock, status: this.status, updatedAt },
     });
 
     this.stock = nextStock;
-    this.status = nextStatus;
     this.updatedAt = updatedAt;
 
     this.notifySuppliers(`Product sold: ${this.name}`, `${quantity} unit(s) of ${this.name} were sold. Remaining stock: ${this.stock}.`);
@@ -360,14 +370,14 @@ export class Product {
   // --- Lifecycle ---
 
   async deprecate(): Promise<void> {
+    this.transitionStatus("deprecated");
     const updatedAt = new Date();
 
     await prisma.product.update({
       where: { id: this.id },
-      data: { status: "deprecated", stock: 0, updatedAt },
+      data: { status: this.status, stock: 0, updatedAt },
     });
 
-    this.status = "deprecated";
     this.stock = 0;
     this.updatedAt = updatedAt;
 
