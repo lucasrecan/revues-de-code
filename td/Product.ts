@@ -31,7 +31,7 @@ export class Supplier {
     public name: string,
     public email: string,
     public region: string,
-  ) {}
+  ) { }
 }
 
 export class Warehouse {
@@ -40,7 +40,7 @@ export class Warehouse {
     public name: string,
     public address: string,
     public region: string,
-  ) {}
+  ) { }
 }
 
 export const DEFAULT_MARGIN_PERCENTAGE: number = 15;
@@ -141,21 +141,15 @@ export class Product {
   }
 
   getDisplayLabel(): string {
-    let label: string;
     if (this.status === "deprecated") {
-      label = `[DISCONTINUED] ${this.name}`;
-    } else {
-      if (this.stock === 0) {
-        label = `[OUT OF STOCK] ${this.name}`;
-      } else {
-        if (this.status === "active") {
-          label = this.name;
-        } else {
-          label = this.name;
-        }
-      }
+      return `[DISCONTINUED] ${this.name}`;
     }
-    return label;
+
+    if (this.stock === 0) {
+      return `[OUT OF STOCK] ${this.name}`;
+    }
+
+    return this.name;
   }
 
   // --- Catalog / images / discounts ---
@@ -284,7 +278,7 @@ export class Product {
   // --- Stock ---
 
   async receiveStock(quantity: number): Promise<void> {
-    if (!this.warehouse){
+    if (!this.warehouse) {
       throw new Error("Cannot receive stock: no warehouse assigned");
     }
     this.stock += quantity;
@@ -336,12 +330,12 @@ export class Product {
   }
 
   private notifySuppliers(subject: string, body: string): void {
-  for (const [, supplier] of this.suppliersRegions) {
-    this.notifications.push(
-      this.createNotification(supplier.email, subject, body)
-    );
+    for (const [, supplier] of this.suppliersRegions) {
+      this.notifications.push(
+        this.createNotification(supplier.email, subject, body)
+      );
+    }
   }
-}
 
   // small helper to cut down repetition in notif building
   private createNotification(recipient: string, subject: string, body: string): Notification {
