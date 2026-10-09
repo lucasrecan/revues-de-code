@@ -333,6 +333,8 @@ export class Product {
 
     // Notify customers
     this.notifications.push(this.createNotification("customers@omniproduct.com", `Product no longer available: ${this.name}`, `${this.name} is no longer available.`));
+    this.sendNotification();
+    this.drainNotifications();
   }
 
   private notifySuppliers(subject: string, body: string): void {
@@ -341,6 +343,8 @@ export class Product {
       this.createNotification(supplier.email, subject, body)
     );
   }
+  this.sendNotification();
+  this.drainNotifications();
 }
 
   // small helper to cut down repetition in notif building
@@ -354,5 +358,13 @@ export class Product {
       sentAt: new Date(),
       productId: this.id,
     };
+  }
+
+  private sendNotification(): void {
+    // TODO Envoyer la notification
+  }
+
+  private drainNotifications(): void {
+    this.notifications.length = 0;
   }
 }
