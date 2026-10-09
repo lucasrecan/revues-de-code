@@ -165,19 +165,12 @@ export class Product {
                 if (supplier.email.indexOf("@") > 0 && supplier.email.indexOf(".", supplier.email.indexOf("@")) > supplier.email.indexOf("@")) {
                   imageKey = context + "-" + supplier.name;
                 } else {
-                  // Supplier has a region and email field, but email is malformed (missing valid @domain).
-                  // Treat as a data integrity error: throw instead of gracefully degrading.
                   throw new Error(`Supplier ${supplier.name} has a malformed email: ${supplier.email}`);
                 }
               } else {
-                // Supplier has a region but NO email field (empty string, falsy).
-                // Fall back to generic "-supplier" marker, losing the supplier's identity.
                 imageKey = context + "-supplier";
               }
             } else {
-              // Supplier has NO region at all (empty string, null, undefined).
-              // Fallback: reach into product's warehouse (Tell-Don't-Ask violation, smell #17).
-              // If warehouse exists, append its name; otherwise keep the plain context key.
               imageKey = this.warehouse ? context + "-" + this.warehouse.name : context;
             }
           }
@@ -191,12 +184,9 @@ export class Product {
           data: { images: this.images as Prisma.InputJsonValue, updatedAt: this.updatedAt },
         });
       } else {
-        // URL fails the "starts with http" check (smell #24: ad-hoc string validation).
         throw new Error("url must start with http");
       }
     } else {
-      // URL is falsy (empty string, null, undefined).
-      // Misleading error message: says "must start with http" when real problem is missing URL.
       throw new Error("url must start with http");
     }
   }
